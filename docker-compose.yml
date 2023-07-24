@@ -57,6 +57,21 @@ services:
     ports:
       - 6379:6379
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '3.00'
+          memory: 8G 
+          pids: 40 
+        reservations:
+          cpus: '2.00'
+          memory: 3G 
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 8 
+        window: 120s
+
 
   flower:
     build:
