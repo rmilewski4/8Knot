@@ -48,6 +48,28 @@ body {
     background-color: var(--color-bg-contrast)
 }
 
+blockquote h5 {
+  color: #aaa !important;
+}
+
+blockquote {
+  color: #8d9d92 !important;
+  font-style: normal;
+  font-size: 18px;
+  margin-left: 32px;
+  font-family: Consolas, "Times New Roman", Verdana;
+  border-left: 4px solid #787878;
+  padding-left: 8px;
+}
+
+blockquote p {
+  margin-top: 1px;
+  margin-bottom: 1px;
+  width: auto;
+  min-width: 50px;
+  max-width: 950px;
+}
+
 /* this is to change the color for the spinner, cant be changed directly */
 /* .dash-spinner.dash-default-spinner {
     filter: contrast(1.2) hue-rotate(308deg) grayscale(0.76) !important;
@@ -221,4 +243,5 @@ rect[class="bg"] {
     color: var(--color-fg) !important;
     text-shadow: none !important;
     font-weight: normal !important;
+
 }

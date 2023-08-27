@@ -4,6 +4,8 @@ from app import celery_app
 from cache_manager.cache_manager import CacheManager as cm
 import pandas as pd
 import io
+import datetime as dt
+from sqlalchemy.exc import SQLAlchemyError
 
 QUERY_NAME = "ISSUE"
 
@@ -15,15 +17,13 @@ QUERY_NAME = "ISSUE"
     retry_kwargs={"max_retries": 5},
     retry_jitter=True,
 )
-def issues_query(self, dbmc, repos):
+def issues_query(self, repos):
     """
     (Worker Query)
     Executes SQL query against Augur database for issue data.
 
     Args:
     -----
-        dbmc (AugurManager): Handles connection to Augur database, executes queries and returns results.
-
         repo_ids ([str]): repos that SQL query is executed on.
 
     Returns:
@@ -54,17 +54,27 @@ def issues_query(self, dbmc, repos):
                         r.repo_id in ({str(repos)[1:-1]})
                     """
 
-    # logging.warning(query_string)
-
-    # create database connection, load config, execute query above.
-    dbm = AugurManager()
-    dbm.load_pconfig(dbmc)
+    try:
+        dbm = AugurManager()
+        engine = dbm.get_engine()
+    except KeyError:
+        # noack, data wasn't successfully set.
+        logging.error(f"{QUERY_NAME}_DATA_QUERY - INCOMPLETE ENVIRONMENT")
+        return False
+    except SQLAlchemyError:
+        logging.error(f"{QUERY_NAME}_DATA_QUERY - COULDN'T CONNECT TO DB")
+        # allow retry via Celery rules.
+        raise SQLAlchemyError("DBConnect failed")
 
     df = dbm.run_query(query_string)
 
     df = df[df["pull_request_id"].isnull()]
     df = df.drop(columns="pull_request_id")
     df = df.sort_values(by="created")
+
+    # change to compatible type and remove all data that has been incorrectly formated
+    df["created"] = pd.to_datetime(df["created"], utc=True).dt.date
+    df = df[df.created < dt.date.today()]
 
     df = df.reset_index()
     df.drop("index", axis=1, inplace=True)
