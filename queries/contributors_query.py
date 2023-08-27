@@ -4,6 +4,8 @@ from db_manager.augur_manager import AugurManager
 from app import celery_app
 from cache_manager.cache_manager import CacheManager as cm
 import io
+import datetime as dt
+from sqlalchemy.exc import SQLAlchemyError
 
 QUERY_NAME = "CONTRIBUTOR"
 
@@ -15,15 +17,13 @@ QUERY_NAME = "CONTRIBUTOR"
     retry_kwargs={"max_retries": 5},
     retry_jitter=True,
 )
-def contributors_query(self, dbmc, repos):
+def contributors_query(self, repos):
     """
     (Worker Query)
     Executes SQL query against Augur database for contributor data.
 
     Args:
     -----
-        dbmc (AugurManager): Handles connection to Augur database, executes queries and returns results.
-
         repo_ids ([str]): repos that SQL query is executed on.
 
     Returns:
@@ -38,6 +38,7 @@ def contributors_query(self, dbmc, repos):
     query_string = f"""
                     SELECT
                         repo_id as id,
+                        repo_name as repo_name,
                         cntrb_id,
                         created_at,
                         login,
@@ -49,19 +50,39 @@ def contributors_query(self, dbmc, repos):
                         repo_id in ({str(repos)[1:-1]})
                 """
 
-    # create database connection, load config, execute query above.
-    dbm = AugurManager()
-    dbm.load_pconfig(dbmc)
+    try:
+        dbm = AugurManager()
+        engine = dbm.get_engine()
+    except KeyError:
+        # noack, data wasn't successfully set.
+        logging.error(f"{QUERY_NAME}_DATA_QUERY - INCOMPLETE ENVIRONMENT")
+        return False
+    except SQLAlchemyError:
+        logging.error(f"{QUERY_NAME}_DATA_QUERY - COULDN'T CONNECT TO DB")
+        # allow retry via Celery rules.
+        raise SQLAlchemyError("DBConnect failed")
+
     df = dbm.run_query(query_string)
 
     # update column values
-    df.loc[df["action"] == "open_pull_request", "action"] = "Open PR"
+    df.loc[df["action"] == "pull_request_open", "action"] = "PR Opened"
     df.loc[df["action"] == "pull_request_comment", "action"] = "PR Comment"
+    df.loc[df["action"] == "pull_request_closed", "action"] = "PR Closed"
+    df.loc[df["action"] == "pull_request_merged", "action"] = "PR Merged"
+    df.loc[df["action"] == "pull_request_review_COMMENTED", "action"] = "PR Review"
+    df.loc[df["action"] == "pull_request_review_APPROVED", "action"] = "PR Review"
+    df.loc[df["action"] == "pull_request_review_CHANGES_REQUESTED", "action"] = "PR Review"
+    df.loc[df["action"] == "pull_request_review_DISMISSED", "action"] = "PR Review"
     df.loc[df["action"] == "issue_opened", "action"] = "Issue Opened"
     df.loc[df["action"] == "issue_closed", "action"] = "Issue Closed"
+    df.loc[df["action"] == "issue_comment", "action"] = "Issue Comment"
     df.loc[df["action"] == "commit", "action"] = "Commit"
     df["cntrb_id"] = df["cntrb_id"].astype(str)  # contributor ids to strings
     df.rename(columns={"action": "Action"}, inplace=True)
+
+    # change to compatible type and remove all data that has been incorrectly formated
+    df["created_at"] = pd.to_datetime(df["created_at"], utc=True).dt.date
+    df = df[df.created_at < dt.date.today()]
 
     df = df.reset_index(drop=True)
 
