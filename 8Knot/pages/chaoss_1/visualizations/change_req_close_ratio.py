@@ -117,7 +117,7 @@ def toggle_popover(n, is_open):
     ],
     background=True,
 )
-def project_velocity_graph(
+def change_req_closure_ratio_graph(
     repolist, interval
 ):
 
