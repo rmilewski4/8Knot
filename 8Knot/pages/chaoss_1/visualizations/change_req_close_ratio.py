@@ -212,6 +212,8 @@ def process_data(
 
     df_ratio = dates.to_frame(index=False, name="Date")
     df_ratio["closed"] = df_closed["closed"]
+    var = df_ratio.values.any()
+    logging.warning(f"{var}")
     df_ratio["Ratio"] = df_ratio.apply(lambda row: get_ratio(df, row.closed, row.Date), axis=1)
     df_ratio["Date"] = df_ratio["Date"].dt.strftime("%Y-%m-%d")
     return df_open, df_closed, df_ratio
@@ -300,7 +302,7 @@ def get_ratio(df, num_closed, date):
 
     # include prs that have not been close yet
     df_open = pd.concat([df_open, df_created[df_created.closed.isnull()]])
-    logging.warning(f"{num_closed}")
+    #logging.warning(f"{num_closed}")
 
     # generates number of columns ie open prs
     num_open = df_open.shape[0]
