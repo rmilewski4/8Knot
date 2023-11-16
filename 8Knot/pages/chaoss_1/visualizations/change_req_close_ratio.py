@@ -34,8 +34,7 @@ gc_change_req_closure_ratio = dbc.Card(
                             """This metric evaluates if the project is handling change requests (e.g., pull requests / merge requests) \n
                             in a timely fashion by measuring the ratio between the total number of open change requests during a time period \n
                             versus the total number of change requests closed in that same period. For more info, see:
-                            https://chaoss.community/kb/metric-change-request-closure-ratio/ \n
-                            https://www.cncf.io/blog/2017/06/05/30-highest-velocity-open-source-projects/ """
+                            https://chaoss.community/kb/metric-change-request-closure-ratio/"""
                         ),
                     ],
                     id=f"popover-{PAGE}-{VIZ_ID}",
@@ -152,7 +151,6 @@ def process_data(
 
     # convert dates to datetime objects rather than strings
     df["created"] = pd.to_datetime(df["created"], utc=True)
-    df["merged"] = pd.to_datetime(df["merged"], utc=True)
     df["closed"] = pd.to_datetime(df["closed"], utc=True)
 
     # order values chronologically by creation date
@@ -164,7 +162,7 @@ def process_data(
         # this is to slice the extra period information that comes with the weekly case
         period_slice = 10
 
-    # --data frames for PR created, merged, or closed. Detailed description applies for all 3.--
+    # --data frames for PR created, or closed. Detailed description applies for all 3.--
 
     # get the count of created prs in the desired interval in pandas period format, sort index to order entries
     created_range = df["created"].dt.to_period(interval).value_counts().sort_index()
@@ -176,10 +174,7 @@ def process_data(
     # the period slice is to handle weekly corner case
     df_created["Date"] = pd.to_datetime(df_created["Date"].astype(str).str[:period_slice])
 
-    # df for merged prs in time interval
-    #merged_range = pd.to_datetime(df["merged"]).dt.to_period(interval).value_counts().sort_index()
-    #df_merged = merged_range.to_frame().reset_index().rename(columns={"index": "Date"})
-    #df_merged["Date"] = pd.to_datetime(df_merged["Date"].astype(str).str[:period_slice])
+
 
     # df for closed prs in time interval
     closed_range = pd.to_datetime(df["closed"]).dt.to_period(interval).value_counts().sort_index()
@@ -215,7 +210,11 @@ def process_data(
 
     df_open["Date"] = df_open["Date"].dt.strftime("%Y-%m-%d")
 
-    return df_open, df_closed, df_open
+    df_ratio = dates.to_frame(index=False, name="Date")
+    df_ratio["closed"] = df_closed["closed"]
+    df_ratio["Ratio"] = df_ratio.apply(lambda row: get_ratio(df, row.closed, row.Date), axis=1)
+    df_ratio["Date"] = df_ratio["Date"].dt.strftime("%Y-%m-%d")
+    return df_open, df_closed, df_ratio
 
 
 
@@ -250,18 +249,28 @@ def create_figure(
             y=df_open["Open"],
             mode="lines",
             marker=dict(color=color_seq[5]),
-            name="Open",
-            hovertemplate="PRs Open: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
+            name="Total",
+            hovertemplate="Total PRs Open: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
         )
     )
     fig.add_trace(
         go.Scatter(
-            x=df_open["Date"],
-            y=df_open["Closed"],
+            x=df_closed["Date"],
+            y=df_closed["closed"],
             mode="lines",
-            marker=dict(color=color_seq[5]),
-            name="Open",
+            marker=dict(color=color_seq[4]),
+            name="Closed",
             hovertemplate="PRs Closed: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df_ratio["Date"],
+            y=df_ratio["Ratio"],
+            mode="lines",
+            marker=dict(color=color_seq[3]),
+            name="Ratio",
+            hovertemplate="PRs closure ratio: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
         )
     )
 
@@ -281,3 +290,19 @@ def get_open(df, date):
     # generates number of columns ie open prs
     num_open = df_open.shape[0]
     return num_open
+
+def get_ratio(df, num_closed, date):
+    # drop rows that are more recent than the date limit
+    df_created = df[df["created"] <= date]
+
+    # drops rows that have been closed after date
+    df_open = df_created[df_created["closed"] > date]
+
+    # include prs that have not been close yet
+    df_open = pd.concat([df_open, df_created[df_created.closed.isnull()]])
+    logging.warning(f"{num_closed}")
+
+    # generates number of columns ie open prs
+    num_open = df_open.shape[0]
+    num_ratio = num_closed / num_open
+    return num_ratio
