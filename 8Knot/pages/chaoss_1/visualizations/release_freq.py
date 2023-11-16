@@ -1,32 +1,29 @@
-'''from dash import html, dcc, callback
+from dash import html, dcc
 import dash
 import dash_bootstrap_components as dbc
+from dash import callback
 from dash.dependencies import Input, Output, State
 import plotly.graph_objects as go
 import pandas as pd
-import logging
-from dateutil.relativedelta import *  # type: ignore
-import plotly.express as px
-from pages.utils.graph_utils import get_graph_time_values, color_seq
-from queries.contributors_query import contributors_query as ctq
-import io
-from cache_manager.cache_manager import CacheManager as cm
-from pages.utils.job_utils import nodata_graph
-import time
 import datetime as dt
-import math
-import numpy as np
+import logging
+from pages.utils.graph_utils import get_graph_time_values, color_seq
+import io
+from pages.utils.job_utils import nodata_graph
+from queries.release_query import release_query as rlq
+from cache_manager.cache_manager import CacheManager as cm
+import time
 
 
 PAGE = "chaoss_1"
-VIZ_ID = "project-velocity"
+VIZ_ID = "release-frequency"
 
-gc_project_velocity = dbc.Card(
+gc_release_freq = dbc.Card(
     [
         dbc.CardBody(
             [
                 html.H3(
-                    "Project Velocity",
+                    "Release Frequency",
                     className="card-title",
                     style={"textAlign": "center"},
                 ),
@@ -34,10 +31,10 @@ gc_project_velocity = dbc.Card(
                     [
                         dbc.PopoverHeader("Graph Info:"),
                         dbc.PopoverBody(
-                            """This visualization gives a view into the development speed of a repository in\n
-                            relation to the other selected repositories. For more context of this visualization see\n
-                            https://chaoss.community/kb/metric-project-velocity/ \n
-                            https://www.cncf.io/blog/2017/06/05/30-highest-velocity-open-source-projects/ """
+                            """The frequency of project software / artifact releases over time. \n
+                            This includes the major releases and smaller point releases that might contain bug fixes and security updates. \n
+                            For more info, see:
+                            https://chaoss.community/kb/metric-release-frequency/"""
                         ),
                     ],
                     id=f"popover-{PAGE}-{VIZ_ID}",
@@ -53,131 +50,29 @@ gc_project_velocity = dbc.Card(
                         dbc.Row(
                             [
                                 dbc.Label(
-                                    "Issue Opened Weight:",
-                                    html_for=f"issue-opened-weight-{PAGE}-{VIZ_ID}",
-                                    width={"size": "auto"},
-                                ),
-                                dbc.Col(
-                                    dbc.Input(
-                                        id=f"issue-opened-weight-{PAGE}-{VIZ_ID}",
-                                        type="number",
-                                        min=0,
-                                        max=1,
-                                        step=0.1,
-                                        value=0.3,
-                                        size="sm",
-                                    ),
-                                    className="me-2",
-                                    width=1,
-                                ),
-                                dbc.Label(
-                                    "Issue Closed Weight:",
-                                    html_for=f"issue-closed-weight-{PAGE}-{VIZ_ID}",
-                                    width={"size": "auto"},
-                                ),
-                                dbc.Col(
-                                    dbc.Input(
-                                        id=f"issue-closed-weight-{PAGE}-{VIZ_ID}",
-                                        type="number",
-                                        min=0,
-                                        max=1,
-                                        step=0.1,
-                                        value=0.4,
-                                        size="sm",
-                                    ),
-                                    className="me-2",
-                                    width=1,
-                                ),
-                                dbc.Label(
-                                    "Y-axis:",
-                                    html_for=f"graph-view-{PAGE}-{VIZ_ID}",
+                                    "Date Interval:",
+                                    html_for=f"date-interval-{PAGE}-{VIZ_ID}",
                                     width="auto",
                                 ),
                                 dbc.Col(
                                     dbc.RadioItems(
-                                        id=f"graph-view-{PAGE}-{VIZ_ID}",
+                                        id=f"date-interval-{PAGE}-{VIZ_ID}",
                                         options=[
-                                            {"label": "Non-log", "value": False},
-                                            {"label": "Log", "value": True},
+                                            {
+                                                "label": "Day",
+                                                "value": "D",
+                                            },
+                                            {
+                                                "label": "Week",
+                                                "value": "W",
+                                            },
+                                            {"label": "Month", "value": "M"},
+                                            {"label": "Year", "value": "Y"},
                                         ],
-                                        value=False,
+                                        value="M",
                                         inline=True,
                                     ),
                                     className="me-2",
-                                ),
-                            ],
-                            align="center",
-                        ),
-                        dbc.Row(
-                            [
-                                dbc.Label(
-                                    "PR Open Weight:",
-                                    html_for=f"pr-open-weight-{PAGE}-{VIZ_ID}",
-                                    width={"size": "auto"},
-                                ),
-                                dbc.Col(
-                                    dbc.Input(
-                                        id=f"pr-open-weight-{PAGE}-{VIZ_ID}",
-                                        type="number",
-                                        min=0,
-                                        max=1,
-                                        step=0.1,
-                                        value=0.5,
-                                        size="sm",
-                                    ),
-                                    className="me-2",
-                                    width=1,
-                                ),
-                                dbc.Label(
-                                    "PR Merged Weight:",
-                                    html_for=f"pr-merged-weight-{PAGE}-{VIZ_ID}",
-                                    width={"size": "auto"},
-                                ),
-                                dbc.Col(
-                                    dbc.Input(
-                                        id=f"pr-merged-weight-{PAGE}-{VIZ_ID}",
-                                        type="number",
-                                        min=0,
-                                        max=1,
-                                        step=0.1,
-                                        value=0.7,
-                                        size="sm",
-                                    ),
-                                    className="me-2",
-                                    width=1,
-                                ),
-                                dbc.Label(
-                                    "PR Closed Weight:",
-                                    html_for=f"pr-closed-weight-{PAGE}-{VIZ_ID}",
-                                    width={"size": "auto"},
-                                ),
-                                dbc.Col(
-                                    dbc.Input(
-                                        id=f"pr-closed-weight-{PAGE}-{VIZ_ID}",
-                                        type="number",
-                                        min=0,
-                                        max=1,
-                                        step=0.1,
-                                        value=0.2,
-                                        size="sm",
-                                    ),
-                                    className="me-2",
-                                    width=1,
-                                ),
-                            ],
-                            align="center",
-                        ),
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    dcc.DatePickerRange(
-                                        id=f"date-picker-range-{PAGE}-{VIZ_ID}",
-                                        min_date_allowed=dt.date(2005, 1, 1),
-                                        max_date_allowed=dt.date.today(),
-                                        initial_visible_month=dt.date(dt.date.today().year, 1, 1),
-                                        clearable=True,
-                                    ),
-                                    width="auto",
                                 ),
                                 dbc.Col(
                                     dbc.Button(
@@ -191,7 +86,6 @@ gc_project_velocity = dbc.Card(
                                 ),
                             ],
                             align="center",
-                            justify="between",
                         ),
                     ]
                 ),
@@ -213,32 +107,25 @@ def toggle_popover(n, is_open):
     return is_open
 
 
-# callback for Project Velocity graph
+# callback for release freq graph
 @callback(
     Output(f"{PAGE}-{VIZ_ID}", "figure"),
     [
         Input("repo-choices", "data"),
-        Input(f"graph-view-{PAGE}-{VIZ_ID}", "value"),
-        Input(f"issue-opened-weight-{PAGE}-{VIZ_ID}", "value"),
-        Input(f"issue-closed-weight-{PAGE}-{VIZ_ID}", "value"),
-        Input(f"pr-open-weight-{PAGE}-{VIZ_ID}", "value"),
-        Input(f"pr-merged-weight-{PAGE}-{VIZ_ID}", "value"),
-        Input(f"pr-closed-weight-{PAGE}-{VIZ_ID}", "value"),
-        Input(f"date-picker-range-{PAGE}-{VIZ_ID}", "start_date"),
-        Input(f"date-picker-range-{PAGE}-{VIZ_ID}", "end_date"),
+        Input(f"date-interval-{PAGE}-{VIZ_ID}", "value"),
     ],
     background=True,
 )
-def project_velocity_graph(
-    repolist, log, i_o_weight, i_c_weight, pr_o_weight, pr_m_weight, pr_c_weight, start_date, end_date
+def release_freq_graph(
+    repolist, interval
 ):
 
     # wait for data to asynchronously download and become available.
     cache = cm()
-    df = cache.grabm(func=ctq, repos=repolist)
+    df = cache.grabm(func=rlq, repos=repolist)
     while df is None:
         time.sleep(1.0)
-        df = cache.grabm(func=ctq, repos=repolist)
+        df = cache.grabm(func=rlq, repos=repolist)
 
     start = time.perf_counter()
     logging.warning(f"{VIZ_ID}- START")
@@ -249,9 +136,9 @@ def project_velocity_graph(
         return nodata_graph
 
     # function for all data pre processing
-    df = process_data(df, start_date, end_date, i_o_weight, i_c_weight, pr_o_weight, pr_m_weight, pr_c_weight)
+    df_release = process_data(df, interval)
 
-    fig = create_figure(df, log)
+    fig = create_figure(df_release, interval)
 
     logging.warning(f"{VIZ_ID} - END - {time.perf_counter() - start}")
     return fig
@@ -259,93 +146,162 @@ def project_velocity_graph(
 
 def process_data(
     df: pd.DataFrame,
-    start_date,
-    end_date,
-    i_o_weight,
-    i_c_weight,
-    pr_o_weight,
-    pr_m_weight,
-    pr_c_weight,
+    interval
 ):
 
-    # convert to datetime objects rather than strings
-    df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
+    # convert dates to datetime objects rather than strings
+    df["created"] = pd.to_datetime(df["created"], utc=True)
+    df["closed"] = pd.to_datetime(df["closed"], utc=True)
 
-    # order values chronologically by COLUMN_TO_SORT_BY date
-    df = df.sort_values(by="created_at", axis=0, ascending=True)
+    # order values chronologically by creation date
+    df = df.sort_values(by="created", axis=0, ascending=True)
 
-    # filter values based on date picker
-    if start_date is not None:
-        df = df[df.created_at >= start_date]
-    if end_date is not None:
-        df = df[df.created_at <= end_date]
+    # variable to slice on to handle weekly period edge case
+    period_slice = None
+    if interval == "W":
+        # this is to slice the extra period information that comes with the weekly case
+        period_slice = 10
 
-    # df to hold value of unique contributors for each repo
-    df_cntrbs = pd.DataFrame(df.groupby("repo_name")["cntrb_id"].nunique()).rename(
-        columns={"cntrb_id": "num_unique_contributors"}
-    )
+    # --data frames for PR created, or closed. Detailed description applies for all 3.--
 
-    # group actions and repos to get the counts of the actions by repo
-    df_actions = pd.DataFrame(df.groupby("repo_name")["Action"].value_counts())
-    df_actions = df_actions.rename(columns={"Action": "count"}).reset_index()
+    # get the count of created prs in the desired interval in pandas period format, sort index to order entries
+    created_range = df["created"].dt.to_period(interval).value_counts().sort_index()
 
-    # pivot df to reformat the actions to be columns and repo_id to be rows
-    df_actions = df_actions.pivot(index="repo_name", columns="Action", values="count")
+    # converts to data frame object and created date column from period values
+    df_created = created_range.to_frame().reset_index().rename(columns={"index": "Date"})
 
-    # df_consolidated combines the actions and unique contributors and then specific columns for visualization use are added on
-    df_consolidated = pd.concat([df_actions, df_cntrbs], axis=1).reset_index()
-
-    # log of commits and contribs
-    df_consolidated["log_num_commits"] = df_consolidated["Commit"].apply(math.log)
-    df_consolidated["log_num_contrib"] = df_consolidated["num_unique_contributors"].apply(math.log)
-
-    # column to hold the weighted values of pr and issues actions summed together
-    df_consolidated["prs_issues_actions_weighted"] = (
-        df_consolidated["Issue Opened"] * i_o_weight
-        + df_consolidated["Issue Closed"] * i_c_weight
-        + df_consolidated["PR Opened"] * pr_o_weight
-        + df_consolidated["PR Merged"] * pr_m_weight
-        + df_consolidated["PR Closed"] * pr_c_weight
-    )
-
-    # column for log value of pr and issue actions
-    df_consolidated["log_prs_issues_actions_weighted"] = df_consolidated["prs_issues_actions_weighted"].apply(math.log)
-
-    return df_consolidated
+    # converts date column to a datetime object, converts to string first to handle period information
+    # the period slice is to handle weekly corner case
+    df_created["Date"] = pd.to_datetime(df_created["Date"].astype(str).str[:period_slice])
 
 
-def create_figure(df: pd.DataFrame, log):
 
-    y_axis = "prs_issues_actions_weighted"
-    y_title = "Weighted PR/Issue Actions"
-    if log:
-        y_axis = "log_prs_issues_actions_weighted"
-        y_title = "Log of Weighted PR/Issue Actions"
+    # df for closed prs in time interval
+    closed_range = pd.to_datetime(df["closed"]).dt.to_period(interval).value_counts().sort_index()
+    df_closed = closed_range.to_frame().reset_index().rename(columns={"index": "Date"})
+    df_closed["Date"] = pd.to_datetime(df_closed["Date"].astype(str).str[:period_slice])
+
+    
+
+    # formatting for graph generation
+    if interval == "M":
+        df_created["Date"] = df_created["Date"].dt.strftime("%Y-%m-01")
+        df_closed["Date"] = df_closed["Date"].dt.strftime("%Y-%m-01")
+    elif interval == "Y":
+        df_created["Date"] = df_created["Date"].dt.strftime("%Y-01-01")
+        df_closed["Date"] = df_closed["Date"].dt.strftime("%Y-01-01")
+
+
+    # ----- Open PR processinging starts here ----
+
+    # first and last elements of the dataframe are the
+    # earliest and latest events respectively
+    earliest = df["created"].min()
+    latest = max(df["created"].max(), df["closed"].max())
+
+    # beginning to the end of time by the specified interval
+    dates = pd.date_range(start=earliest, end=latest, freq=interval, inclusive="both")
+
+    # df for open prs from time interval
+    df_open = dates.to_frame(index=False, name="Date")
+
+    # aplies function to get the amount of open prs for each day
+    df_open["Open"] = df_open.apply(lambda row: get_open(df, row.Date), axis=1)
+
+    df_open["Date"] = df_open["Date"].dt.strftime("%Y-%m-%d")
+
+    df_ratio = dates.to_frame(index=False, name="Date")
+    df_ratio["closed"] = df_closed["closed"]
+    df_ratio["Ratio"] = df_ratio.apply(lambda row: get_ratio(df, row.closed, row.Date), axis=1)
+    df_ratio["Date"] = df_ratio["Date"].dt.strftime("%Y-%m-%d")
+    return df_open, df_closed, df_ratio
+
+
+
+def create_figure(
+    df_open: pd.DataFrame,
+    df_closed: pd.DataFrame,
+    df_ratio: pd.DataFrame,
+    interval,
+):
+    # time values for graph
+    x_r, x_name, hover, period = get_graph_time_values(interval)
 
     # graph generation
-    fig = px.scatter(
-        df,
-        x="log_num_commits",
-        y=y_axis,
-        color="repo_name",
-        size="log_num_contrib",
-        hover_data=["repo_name", "Commit", "PR Opened", "Issue Opened", "num_unique_contributors"],
-        color_discrete_sequence=color_seq,
+    fig = go.Figure()
+    fig.update_xaxes(
+        showgrid=True,
+        ticklabelmode="period",
+        dtick=period,
+        rangeslider_yaxis_rangemode="match",
+        range=x_r,
     )
-
-    fig.update_traces(
-        hovertemplate="Repo: %{customdata[0]} <br>Commits: %{customdata[1]} <br>Total PRs: %{customdata[2]}"
-        + "<br>Total Issues: %{customdata[3]} <br>Total Contributors: %{customdata[4]}<br><extra></extra>",
-    )
-
-    # layout styling
     fig.update_layout(
-        xaxis_title="Logarithmic Commits",
-        yaxis_title=y_title,
+        xaxis_title=x_name,
+        yaxis_title="Number of PRs",
+        bargroupgap=0.1,
         margin_b=40,
         font=dict(size=14),
-        legend_title="Repo Name",
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df_open["Date"],
+            y=df_open["Open"],
+            mode="lines",
+            marker=dict(color=color_seq[5]),
+            name="Total",
+            hovertemplate="Total PRs Open: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df_closed["Date"],
+            y=df_closed["closed"],
+            mode="lines",
+            marker=dict(color=color_seq[4]),
+            name="Closed",
+            hovertemplate="PRs Closed: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df_ratio["Date"],
+            y=df_ratio["Ratio"],
+            mode="lines",
+            marker=dict(color=color_seq[3]),
+            name="Ratio",
+            hovertemplate="PRs closure ratio: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
+        )
     )
 
     return fig
-'''
+
+# for each day, this function calculates the amount of open prs
+def get_open(df, date):
+    # drop rows that are more recent than the date limit
+    df_created = df[df["created"] <= date]
+
+    # drops rows that have been closed after date
+    df_open = df_created[df_created["closed"] > date]
+
+    # include prs that have not been close yet
+    df_open = pd.concat([df_open, df_created[df_created.closed.isnull()]])
+
+    # generates number of columns ie open prs
+    num_open = df_open.shape[0]
+    return num_open
+
+def get_ratio(df, num_closed, date):
+    # drop rows that are more recent than the date limit
+    df_created = df[df["created"] <= date]
+
+    # drops rows that have been closed after date
+    df_open = df_created[df_created["closed"] > date]
+
+    # include prs that have not been close yet
+    df_open = pd.concat([df_open, df_created[df_created.closed.isnull()]])
+
+    # generates number of columns ie open prs
+    num_open = df_open.shape[0]
+    num_ratio = num_closed / num_open
+    return num_ratio
