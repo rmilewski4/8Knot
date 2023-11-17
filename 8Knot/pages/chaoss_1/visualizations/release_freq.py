@@ -13,7 +13,7 @@ from pages.utils.job_utils import nodata_graph
 from queries.release_query import release_query as rlq
 from cache_manager.cache_manager import CacheManager as cm
 import time
-
+import numpy as np
 
 PAGE = "chaoss_1"
 VIZ_ID = "release-frequency"
@@ -150,11 +150,10 @@ def process_data(
 ):
 
     # convert dates to datetime objects rather than strings
-    df["created"] = pd.to_datetime(df["created"], utc=True)
-    df["closed"] = pd.to_datetime(df["closed"], utc=True)
+    df["releasedate"] = pd.to_datetime(df["releasedate"], utc=True)
 
     # order values chronologically by creation date
-    df = df.sort_values(by="created", axis=0, ascending=True)
+    df = df.sort_values(by="releasedate", axis=0, ascending=True)
 
     # variable to slice on to handle weekly period edge case
     period_slice = None
@@ -165,63 +164,59 @@ def process_data(
     # --data frames for PR created, or closed. Detailed description applies for all 3.--
 
     # get the count of created prs in the desired interval in pandas period format, sort index to order entries
-    created_range = df["created"].dt.to_period(interval).value_counts().sort_index()
+    #created_range = df["created"].dt.to_period(interval).value_counts().sort_index()
 
     # converts to data frame object and created date column from period values
-    df_created = created_range.to_frame().reset_index().rename(columns={"index": "Date"})
-
+    #df_created = created_range.to_frame().reset_index().rename(columns={"index": "Date"})
+    
     # converts date column to a datetime object, converts to string first to handle period information
     # the period slice is to handle weekly corner case
-    df_created["Date"] = pd.to_datetime(df_created["Date"].astype(str).str[:period_slice])
-
-
-
+    #df_created["Date"] = pd.to_datetime(df_created["Date"].astype(str).str[:period_slice])
+    release_range = df["releasedate"].dt.to_period(interval).value_counts().sort_index()
+    df_release = release_range.to_frame().reset_index().rename(columns={"index": "Date"})
+    df_release["Date"] = pd.to_datetime(df_release["Date"].astype(str).str[:period_slice])
     # df for closed prs in time interval
-    closed_range = pd.to_datetime(df["closed"]).dt.to_period(interval).value_counts().sort_index()
-    df_closed = closed_range.to_frame().reset_index().rename(columns={"index": "Date"})
-    df_closed["Date"] = pd.to_datetime(df_closed["Date"].astype(str).str[:period_slice])
+    #closed_range = pd.to_datetime(df["closed"]).dt.to_period(interval).value_counts().sort_index()
+    #f_closed = closed_range.to_frame().reset_index().rename(columns={"index": "Date"})
+    #df_closed["Date"] = pd.to_datetime(df_closed["Date"].astype(str).str[:period_slice])
 
     
 
     # formatting for graph generation
     if interval == "M":
-        df_created["Date"] = df_created["Date"].dt.strftime("%Y-%m-01")
-        df_closed["Date"] = df_closed["Date"].dt.strftime("%Y-%m-01")
+        df_release["Date"] = df_release["Date"].dt.strftime("%Y-%m-01")
     elif interval == "Y":
-        df_created["Date"] = df_created["Date"].dt.strftime("%Y-01-01")
-        df_closed["Date"] = df_closed["Date"].dt.strftime("%Y-01-01")
+        df_release["Date"] = df_release["Date"].dt.strftime("%Y-01-01")
 
 
     # ----- Open PR processinging starts here ----
 
     # first and last elements of the dataframe are the
     # earliest and latest events respectively
-    earliest = df["created"].min()
-    latest = max(df["created"].max(), df["closed"].max())
+    #earliest = df["created"].min()
+    #latest = max(df["created"].max(), df["closed"].max())
 
     # beginning to the end of time by the specified interval
-    dates = pd.date_range(start=earliest, end=latest, freq=interval, inclusive="both")
+    #dates = pd.date_range(start=earliest, end=latest, freq=interval, inclusive="both")
 
     # df for open prs from time interval
-    df_open = dates.to_frame(index=False, name="Date")
+    #df_open = dates.to_frame(index=False, name="Date")
 
     # aplies function to get the amount of open prs for each day
-    df_open["Open"] = df_open.apply(lambda row: get_open(df, row.Date), axis=1)
+    #df_open["Open"] = df_open.apply(lambda row: get_open(df, row.Date), axis=1)
 
-    df_open["Date"] = df_open["Date"].dt.strftime("%Y-%m-%d")
+    #df_open["Date"] = df_open["Date"].dt.strftime("%Y-%m-%d")
 
-    df_ratio = dates.to_frame(index=False, name="Date")
-    df_ratio["closed"] = df_closed["closed"]
-    df_ratio["Ratio"] = df_ratio.apply(lambda row: get_ratio(df, row.closed, row.Date), axis=1)
-    df_ratio["Date"] = df_ratio["Date"].dt.strftime("%Y-%m-%d")
-    return df_open, df_closed, df_ratio
+    #df_ratio = dates.to_frame(index=False, name="Date")
+    #df_ratio["closed"] = df_closed["closed"]
+    #df_ratio["Ratio"] = df_ratio.apply(lambda row: get_ratio(df, row.closed, row.Date), axis=1)
+    #df_ratio["Date"] = df_ratio["Date"].dt.strftime("%Y-%m-%d")
+    return df_release
 
 
 
 def create_figure(
-    df_open: pd.DataFrame,
-    df_closed: pd.DataFrame,
-    df_ratio: pd.DataFrame,
+    df_release: pd.DataFrame,
     interval,
 ):
     # time values for graph
@@ -238,70 +233,21 @@ def create_figure(
     )
     fig.update_layout(
         xaxis_title=x_name,
-        yaxis_title="Number of PRs",
+        yaxis_title="Release",
         bargroupgap=0.1,
         margin_b=40,
         font=dict(size=14),
     )
     fig.add_trace(
         go.Scatter(
-            x=df_open["Date"],
-            y=df_open["Open"],
-            mode="lines",
+            x=df_release["Date"],
+            y=np.ones(df_release.shape[0]),
+            mode="markers",
             marker=dict(color=color_seq[5]),
-            name="Total",
-            hovertemplate="Total PRs Open: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df_closed["Date"],
-            y=df_closed["closed"],
-            mode="lines",
-            marker=dict(color=color_seq[4]),
-            name="Closed",
-            hovertemplate="PRs Closed: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df_ratio["Date"],
-            y=df_ratio["Ratio"],
-            mode="lines",
-            marker=dict(color=color_seq[3]),
-            name="Ratio",
-            hovertemplate="PRs closure ratio: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
+            name="Releases",
+            hovertemplate="Release Count: %{y}<br>%{x|%b %d, %Y} <extra></extra>",
         )
     )
 
     return fig
 
-# for each day, this function calculates the amount of open prs
-def get_open(df, date):
-    # drop rows that are more recent than the date limit
-    df_created = df[df["created"] <= date]
-
-    # drops rows that have been closed after date
-    df_open = df_created[df_created["closed"] > date]
-
-    # include prs that have not been close yet
-    df_open = pd.concat([df_open, df_created[df_created.closed.isnull()]])
-
-    # generates number of columns ie open prs
-    num_open = df_open.shape[0]
-    return num_open
-
-def get_ratio(df, num_closed, date):
-    # drop rows that are more recent than the date limit
-    df_created = df[df["created"] <= date]
-
-    # drops rows that have been closed after date
-    df_open = df_created[df_created["closed"] > date]
-
-    # include prs that have not been close yet
-    df_open = pd.concat([df_open, df_created[df_created.closed.isnull()]])
-
-    # generates number of columns ie open prs
-    num_open = df_open.shape[0]
-    num_ratio = num_closed / num_open
-    return num_ratio

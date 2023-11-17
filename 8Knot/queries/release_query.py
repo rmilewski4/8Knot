@@ -48,10 +48,9 @@ def release_query(self, repos):
         return None
 
     query_string = f"""
-                    select r.repo_id, r.repo_name, r.repo_git, re.release_published_at
+                    select r.repo_id as id, r.repo_name, r.repo_git, re.release_published_at as releasedate
                     from repo r, releases re 
                     where r.repo_id = re.repo_id 
-                    and r.repo_id=1 
                     and release_published_at is not NULL
                     and r.repo_id in ({str(repos)[1:-1]})
                     order by release_published_at
@@ -70,7 +69,7 @@ def release_query(self, repos):
         raise SQLAlchemyError("DBConnect failed")
 
     df = dbm.run_query(query_string)
-
+    logging.warning(f"{df}")
     # pandas column and format updates
     """Commonly used df updates:
 
@@ -82,9 +81,12 @@ def release_query(self, repos):
 
     """
     # change to compatible type and remove all data that has been incorrectly formated
-    df["created"] = pd.to_datetime(df["created"], utc=True).dt.date
-    df = df[df.created < dt.date.today()]
+    df["releasedate"] = pd.to_datetime(df["releasedate"], utc=True).dt.date
+    df = df[df.releasedate < dt.date.today()]
 
+    df = df.sort_values(by="releasedate")
+    df = df.reset_index()
+    df.drop("index", axis=1, inplace=True)
     pic = []
 
     for i, r in enumerate(repos):
@@ -111,7 +113,7 @@ def release_query(self, repos):
 
     # 'ack' is a boolean of whether data was set correctly or not.
     ack = cm_o.setm(
-        func=NAME_query,
+        func=release_query,
         repos=repos,
         datas=pic,
     )

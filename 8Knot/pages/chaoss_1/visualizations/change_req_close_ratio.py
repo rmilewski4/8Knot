@@ -303,5 +303,8 @@ def get_ratio(df, num_closed, date):
 
     # generates number of columns ie open prs
     num_open = df_open.shape[0]
-    num_ratio = num_closed / num_open
+    try:
+        num_ratio = num_closed / num_open
+    except ZeroDivisionError:
+        num_ratio = 0
     return num_ratio

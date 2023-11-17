@@ -26,7 +26,7 @@ def prs_query(self, repos):
     -----
         repo_ids ([str]): repos that SQL query is executed on.
 
-    Returns:
+    Returns: 
     --------
         dict: Results from SQL query, interpreted from pd.to_dict('records')
     """
