@@ -7,7 +7,19 @@ import io
 import datetime as dt
 from sqlalchemy.exc import SQLAlchemyError
 
-QUERY_NAME = "PR"
+"""
+TODO:
+(1) update QUERY_NAME
+(2) update 'NAME_query' found in function definition and in the function call that sets the 'ack' variable below.
+'NAME' should be the same as QUERY_NAME
+(3) paste SQL query in the query_string
+(4) insert any necessary df column name or format changed under the pandas column and format updates comment
+(5) reset df index if #4 is performed via "df = df.reset_index(drop=True)"
+(6) go to index/index_callbacks.py and import the NAME_query as a unqiue acronym and add it to the QUERIES list
+(7) delete this list when completed
+"""
+
+QUERY_NAME = "RELEASE"
 
 
 @celery_app.task(
@@ -17,16 +29,16 @@ QUERY_NAME = "PR"
     retry_kwargs={"max_retries": 5},
     retry_jitter=True,
 )
-def prs_query(self, repos):
+def release_query(self, repos):
     """
     (Worker Query)
-    Executes SQL query against Augur database for pull request data.
+    Executes SQL query against Augur database for contributor data.
 
     Args:
     -----
         repo_ids ([str]): repos that SQL query is executed on.
 
-    Returns: 
+    Returns:
     --------
         dict: Results from SQL query, interpreted from pd.to_dict('records')
     """
@@ -36,21 +48,13 @@ def prs_query(self, repos):
         return None
 
     query_string = f"""
-                    SELECT
-                        r.repo_id as id,
-                        r.repo_name,
-                        pr.pull_request_id AS pull_request,
-                        pr.pr_src_number,
-                        pr.pr_created_at AS created,
-                        pr.pr_closed_at AS closed,
-                        pr.pr_merged_at  AS merged
-                    FROM
-                        repo r,
-                        pull_requests pr
-                    WHERE
-                        r.repo_id = pr.repo_id AND
-                        r.repo_id in ({str(repos)[1:-1]})
-                    """
+                    select r.repo_id as id, r.repo_name, r.repo_git, re.release_published_at as releasedate
+                    from repo r, releases re 
+                    where r.repo_id = re.repo_id 
+                    and release_published_at is not NULL
+                    and r.repo_id in ({str(repos)[1:-1]})
+                    order by release_published_at
+                """
 
     try:
         dbm = AugurManager()
@@ -65,20 +69,26 @@ def prs_query(self, repos):
         raise SQLAlchemyError("DBConnect failed")
 
     df = dbm.run_query(query_string)
+    logging.warning(f"{df}")
+    # pandas column and format updates
+    """Commonly used df updates:
 
-    # change to compatible type and remove all data that has been incorrectly formated
-    df["created"] = pd.to_datetime(df["created"], utc=True).dt.date
-    df = df[df.created < dt.date.today()]
-
-    # sort by the date created
+    df["cntrb_id"] = df["cntrb_id"].astype(str)  # contributor ids to strings
+    df["cntrb_id"] = df["cntrb_id"].str[:15]
     df = df.sort_values(by="created")
     df = df.reset_index()
-    df.drop("index", axis=1, inplace=True)
+    df = df.reset_index(drop=True)
 
-    # break apart returned data per repo
-    # and temporarily store in List to be
-    # stored in Redis.
+    """
+    # change to compatible type and remove all data that has been incorrectly formated
+    df["releasedate"] = pd.to_datetime(df["releasedate"], utc=True).dt.date
+    df = df[df.releasedate < dt.date.today()]
+
+    df = df.sort_values(by="releasedate")
+    df = df.reset_index()
+    df.drop("index", axis=1, inplace=True)
     pic = []
+
     for i, r in enumerate(repos):
         # convert series to a dataframe
         c_df = pd.DataFrame(df.loc[df["id"] == r]).reset_index(drop=True)
@@ -103,10 +113,10 @@ def prs_query(self, repos):
 
     # 'ack' is a boolean of whether data was set correctly or not.
     ack = cm_o.setm(
-        func=prs_query,
+        func=release_query,
         repos=repos,
         datas=pic,
     )
-
     logging.warning(f"{QUERY_NAME}_DATA_QUERY - END")
+
     return ack
