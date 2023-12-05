@@ -5,7 +5,7 @@ import warnings
 
 # import visualization cards
 from .visualizations.project_velocity import gc_project_velocity
-from .visualizations.time_to_first_response import time_to_first_response
+from .visualizations.change_request_review_count import change_request_review_count
 from .visualizations.bus_factor             import gc_bus_factor_pie
 from .visualizations.change_req_close_ratio import gc_change_req_closure_ratio
 from .visualizations.release_freq import gc_release_freq
@@ -26,7 +26,7 @@ layout = dbc.Container(
         dbc.Row(
             [
                 dbc.Col(gc_bus_factor_pie, width=6),
-                dbc.Col(time_to_first_response, width=6),
+                dbc.Col(change_request_review_count, width=6),
             ],
             align="center",
             style={"marginBottom": ".5%"},
