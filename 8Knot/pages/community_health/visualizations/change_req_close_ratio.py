@@ -15,7 +15,7 @@ from cache_manager.cache_manager import CacheManager as cm
 import time
 
 
-PAGE = "chaoss_1"
+PAGE = "community_health"
 VIZ_ID = "change-request-closure-ratio"
 
 gc_change_req_closure_ratio = dbc.Card(

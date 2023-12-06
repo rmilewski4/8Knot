@@ -18,7 +18,7 @@ import math
 import numpy as np
 
 
-PAGE = "chaoss_1"
+PAGE = "community_health"
 VIZ_ID = "project-velocity"
 
 gc_project_velocity = dbc.Card(

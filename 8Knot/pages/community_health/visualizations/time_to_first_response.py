@@ -18,7 +18,7 @@ from pages.utils.job_utils import nodata_graph
 import time
 import datetime as dt
 
-PAGE = "chaoss_1"
+PAGE = "community_health"
 VIZ_ID = "time-to-first-response"
 
 time_to_first_response = dbc.Card(

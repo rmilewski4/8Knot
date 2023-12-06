@@ -15,7 +15,7 @@ from cache_manager.cache_manager import CacheManager as cm
 import time
 import numpy as np
 
-PAGE = "chaoss_1"
+PAGE = "community_health"
 VIZ_ID = "release-frequency"
 
 gc_release_freq = dbc.Card(
