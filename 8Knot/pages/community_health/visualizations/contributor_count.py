@@ -25,8 +25,8 @@ gc_bus_factor_pie = dbc.Card(
         dbc.CardBody(
             [
                 html.H3(
-                    "Bus Factor",
-                    id=f"Bus Factor",
+                    "Contributor Count",
+                    id=f"Contributor Count",
                     className="card-title",
                     style={"textAlign": "center"},
                 ),
@@ -34,11 +34,10 @@ gc_bus_factor_pie = dbc.Card(
                     [
                         dbc.PopoverHeader("Graph Info:"),
                         dbc.PopoverBody(
-                            """This visualization gives a view into the makeup of the contributers of a project\n
-                            by the number of total commits they are making, to give insight into the overall health\n
-                            of the maintainence of the project.\n
-                            https://chaoss.community/kb/metric-bus-factor/
-                            """
+                            """Determine how many active commit authors, review participants, \n
+                            issue authors, and issue comments participants there are in the past 90 days\n
+                            https://chaoss.community/kb/metrics-model-community-activity/
+                            """ 
                         ),
                     ],
                     id=f"popover-{PAGE}-{VIZ_ID}",
