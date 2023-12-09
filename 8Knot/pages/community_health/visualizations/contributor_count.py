@@ -10,17 +10,17 @@ import logging
 from dateutil.relativedelta import *  # type: ignore
 import plotly.express as px
 from pages.utils.graph_utils import get_graph_time_values, color_seq
-from queries.commits_query import commits_query as ctq
+from queries.contributors_query import contributors_query as ctq
 import io
 from cache_manager.cache_manager import CacheManager as cm
 from pages.utils.job_utils import nodata_graph
 import time
 import datetime as dt
 
-PAGE = "chaoss_1"
-VIZ_ID = "bus-factor-pie"
+PAGE = "community_health"
+VIZ_ID = "contributor_count"
 
-gc_bus_factor_pie = dbc.Card(
+gc_contributor_count = dbc.Card(
     [
         dbc.CardBody(
             [
@@ -104,7 +104,7 @@ def toggle_popover(n, is_open):
     Input(f"top-k-contributors-{PAGE}-{VIZ_ID}", "value"),
 )
 def graph_title(k):
-    title = f"Bus Factor"
+    title = f"Contributor Count"
     return title
 
 
@@ -118,7 +118,7 @@ def graph_title(k):
     ],
     background=True,
 )
-def bus_factor_graph(repolist, start_date, end_date):
+def contributor_count_graph(repolist, start_date, end_date):
     # wait for data to asynchronously download and become available.
     cache = cm()
     df = cache.grabm(func=ctq, repos=repolist)
@@ -140,56 +140,67 @@ def bus_factor_graph(repolist, start_date, end_date):
     fig = create_figure(df)
 
     logging.warning(f"{VIZ_ID} - END - {time.perf_counter() - start}")
+    
     return fig
 
 
 def process_data(df: pd.DataFrame, start_date, end_date):
+
+    print("MATTHEW")
+    print(list(df.head()))
+
     # convert to datetime objects rather than strings
-    df["date"] = pd.to_datetime(df["date"], utc=True)
+    df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
 
     # order values chronologically by created_at date
-    df = df.sort_values(by="date", ascending=True)
+    df = df.sort_values(by="created_at", ascending=True)
 
     # filter values based on date picker
     if start_date is not None:
-        df = df[df.date >= start_date]
+        df = df[df.created_at >= start_date]
     if end_date is not None:
-        df = df[df.date <= end_date]
+        df = df[df.created_at <= end_date]
 
     # Extract month from the 'date' column
-    df['month'] = df['date'].dt.to_period('M')
+    df['month'] = df['created_at'].dt.to_period('M')
+    contributor_df = df.groupby(['cntrb_id', 'month']).size().reset_index(name='contributor_count')
+    print("MATTHEW Data print")
+    print(contributor_df.to_string())
+    print("Sum: " + contributor_df.size())
+    # contributor_count : Determine how many active commit authors, review participants, issue authors, and issue comments participants there are in the past 90 days.
+    # result_df = df.groupby('month', '')
 
-    # Create a DataFrame for the count of occurrences of each author email per month
-    result_df = df.groupby(['month', 'author_email']).size().reset_index(name='commit_count')
+    # # Create a DataFrame for the count of occurrences of each author email per month
+    # result_df = df.groupby(['month', 'author_email']).size().reset_index(name='commit_count')
 
-    # Initialize a new DataFrame to store the results
-    authors_for_50_percent_df = pd.DataFrame(columns=['month', 'num_authors_for_50_percent'])
+    # # Initialize a new DataFrame to store the results
+    # authors_for_50_percent_df = pd.DataFrame(columns=['month', 'num_authors_for_50_percent'])
 
-    # Loop through each unique month in the result_df
-    for month in result_df['month'].unique():
-        # Filter the result_df for the current month
-        result_df_monthly = result_df[result_df['month'] == month]
+    # # Loop through each unique month in the result_df
+    # for month in result_df['month'].unique():
+    #     # Filter the result_df for the current month
+    #     result_df_monthly = result_df[result_df['month'] == month]
         
-        # Sort the result_df by 'commit_count' in descending order
-        result_df_monthly_sorted = result_df_monthly.sort_values(by='commit_count', ascending=False)
+    #     # Sort the result_df by 'commit_count' in descending order
+    #     result_df_monthly_sorted = result_df_monthly.sort_values(by='commit_count', ascending=False)
         
-        # Calculate the cumulative sum of 'commit_count'
-        result_df_monthly_sorted['cumulative_sum'] = result_df_monthly_sorted['commit_count'].cumsum()
+    #     # Calculate the cumulative sum of 'commit_count'
+    #     result_df_monthly_sorted['cumulative_sum'] = result_df_monthly_sorted['commit_count'].cumsum()
         
-        # Find the index where the cumulative sum crosses 50% of the total sum
-        index_50_percent = (result_df_monthly_sorted['cumulative_sum'] >= result_df_monthly_sorted['commit_count'].sum() * 0.5).idxmax()
+    #     # Find the index where the cumulative sum crosses 50% of the total sum
+    #     index_50_percent = (result_df_monthly_sorted['cumulative_sum'] >= result_df_monthly_sorted['commit_count'].sum() * 0.5).idxmax()
         
-        # Get the number of authors required to reach 50%
-        num_authors_for_50_percent = result_df_monthly_sorted.loc[:index_50_percent].shape[0]
+    #     # Get the number of authors required to reach 50%
+    #     num_authors_for_50_percent = result_df_monthly_sorted.loc[:index_50_percent].shape[0]
         
-        # Append the result to the new DataFrame
-        authors_for_50_percent_df = authors_for_50_percent_df.append({'month': month, 'num_authors_for_50_percent': num_authors_for_50_percent}, ignore_index=True)
+    #     # Append the result to the new DataFrame
+    #     authors_for_50_percent_df = authors_for_50_percent_df.append({'month': month, 'num_authors_for_50_percent': num_authors_for_50_percent}, ignore_index=True)
 
-    authors_for_50_percent_df['month'] = authors_for_50_percent_df['month'].astype(str)
+    # authors_for_50_percent_df['month'] = authors_for_50_percent_df['month'].astype(str)
 
-    # rename Action column to action_type
-    df = df.rename(columns={"author_email": "Author Email"})
-    # # get the number of total contributions
+    # # rename Action column to action_type
+    # df = df.rename(columns={"author_email": "Author Email"})
+    # # # get the number of total contributions
     # t_sum = df[action_type].sum()
 
     # # index df to get first k rows
@@ -229,4 +240,4 @@ def create_figure(df: pd.DataFrame):
     # add legend title
     fig.update_layout(legend_title_text="Bus factor")
 
-    return fig
+    return figr
