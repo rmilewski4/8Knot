@@ -146,9 +146,6 @@ def contributor_count_graph(repolist, start_date, end_date):
 
 def process_data(df: pd.DataFrame, start_date, end_date):
 
-    print("MATTHEW")
-    print(list(df.head()))
-
     # convert to datetime objects rather than strings
     df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
 
@@ -163,59 +160,19 @@ def process_data(df: pd.DataFrame, start_date, end_date):
 
     # Extract month from the 'date' column
     df['month'] = df['created_at'].dt.to_period('M')
-    contributor_df = df.groupby(['cntrb_id', 'month']).size().reset_index(name='contributor_count')
-    print("MATTHEW Data print")
-    print(contributor_df.to_string())
-    print("Sum: " + contributor_df.size())
-    # contributor_count : Determine how many active commit authors, review participants, issue authors, and issue comments participants there are in the past 90 days.
-    # result_df = df.groupby('month', '')
+    
+    
+     # contributor_count : Determine how many active commit authors, review participants, issue authors, and issue comments participants there are in the past 90 days.
 
-    # # Create a DataFrame for the count of occurrences of each author email per month
-    # result_df = df.groupby(['month', 'author_email']).size().reset_index(name='commit_count')
+    # Create a Dataframe for the count of contributions per month 
+    result_df = df.groupby('month')['cntrb_id'].nunique().reset_index(name='num_contributors')
+    
+    # Convert month column to datetime
 
-    # # Initialize a new DataFrame to store the results
-    # authors_for_50_percent_df = pd.DataFrame(columns=['month', 'num_authors_for_50_percent'])
+    result_df['month'] = result_df['month'].dt.to_timestamp()
 
-    # # Loop through each unique month in the result_df
-    # for month in result_df['month'].unique():
-    #     # Filter the result_df for the current month
-    #     result_df_monthly = result_df[result_df['month'] == month]
-        
-    #     # Sort the result_df by 'commit_count' in descending order
-    #     result_df_monthly_sorted = result_df_monthly.sort_values(by='commit_count', ascending=False)
-        
-    #     # Calculate the cumulative sum of 'commit_count'
-    #     result_df_monthly_sorted['cumulative_sum'] = result_df_monthly_sorted['commit_count'].cumsum()
-        
-    #     # Find the index where the cumulative sum crosses 50% of the total sum
-    #     index_50_percent = (result_df_monthly_sorted['cumulative_sum'] >= result_df_monthly_sorted['commit_count'].sum() * 0.5).idxmax()
-        
-    #     # Get the number of authors required to reach 50%
-    #     num_authors_for_50_percent = result_df_monthly_sorted.loc[:index_50_percent].shape[0]
-        
-    #     # Append the result to the new DataFrame
-    #     authors_for_50_percent_df = authors_for_50_percent_df.append({'month': month, 'num_authors_for_50_percent': num_authors_for_50_percent}, ignore_index=True)
 
-    # authors_for_50_percent_df['month'] = authors_for_50_percent_df['month'].astype(str)
-
-    # # rename Action column to action_type
-    # df = df.rename(columns={"author_email": "Author Email"})
-    # # # get the number of total contributions
-    # t_sum = df[action_type].sum()
-
-    # # index df to get first k rows
-    # df = df.head(top_k)
-
-    # # convert cntrb_id from type UUID to String
-    # df["cntrb_id"] = df["cntrb_id"].apply(lambda x: str(x).split("-")[0])
-
-    # # get the number of total top k contributions
-    # df_sum = df[action_type].sum()
-
-    # # calculate the remaining contributions by taking the the difference of t_sum and df_sum
-    # df = df.append({"cntrb_id": "Other", action_type: t_sum - df_sum}, ignore_index=True)
-
-    return authors_for_50_percent_df
+    return result_df
 
 
 def create_figure(df: pd.DataFrame):
@@ -223,21 +180,21 @@ def create_figure(df: pd.DataFrame):
     fig = px.line(
         df,
         x="month",
-        y="num_authors_for_50_percent",
+        y="num_contributors",
         color_discrete_sequence=color_seq
     )
 
     fig.add_trace(
         go.Scatter(
             x=df["month"],
-            y=df["num_authors_for_50_percent"],
+            y=df["num_contributors"],
             mode="lines",
             marker=dict(color=color_seq[4]),
-            name="bus factor",
+            name="contributor_count",
         )
     )
 
     # add legend title
-    fig.update_layout(legend_title_text="Bus factor")
+    fig.update_layout(legend_title_text="Contribution Count")
 
-    return figr
+    return fig
