@@ -8,6 +8,7 @@ from .visualizations.change_request_review_count import change_request_review_co
 
 from .visualizations.issues_closed import gc_issues_closed
 from .visualizations.contributor_count import gc_contributor_count
+from .visualizations.issue_assignments import gc_issue_assignments
 
 warnings.filterwarnings("ignore")
 
@@ -18,6 +19,7 @@ layout = dbc.Container(
         dbc.Row(
             [
                 dbc.Col(gc_issues_closed, width=6),
+                dbc.Col(gc_issue_assignments, width=6),
                 dbc.Col(change_request_review_count, width=6),
             ],
             align="center",
